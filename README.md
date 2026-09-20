@@ -12,6 +12,15 @@
   <a href="https://xdaforums.com/t/port-rom-14-eternityrom-v4-0-oneui-6-1-1-for-n10-s10-series.4670331/">🚀 XDA</a>
 </p>
 
+# Impulse ROM: a d2s fork of EternityROM
+
+**This repository is Impulse ROM**, a modified fork of EternityROM below,
+adapted for the Samsung Galaxy Note10+ Exynos (`d2s` / `SM-N975F`) with a
+newer One UI 8.5 / Android 16 source. The rest of this README is
+EternityROM's own documentation, kept intact as the upstream project it is;
+see [`NOTICE.md`](NOTICE.md) and the "Source and licensing" section below for
+what Impulse specifically changed and how authorship is attributed.
+
 # What is EternityROM?
 EternityROM is a work-in-progress custom firmware for Samsung Galaxy devices. It's based on the latest and greatest iteration of Samsung's UX and it also includes additional features and tweaks to ensure the best possible experience out of the box.
 It is based on the UN1CA build system which allows automatic downloading/extraction of the firmware, applying the required patches and generating a flashable zip/tar package for the specified target device.
@@ -54,6 +63,40 @@ This project is licensed under the terms of the [GNU General Public License v3.0
 - [img2sdat](https://github.com/xpirt/img2sdat), licensed under the [MIT License](https://github.com/xpirt/img2sdat/blob/master/LICENSE)
 - [platform_build](https://android.googlesource.com/platform/build/) (ext4_utils, f2fs_utils, signapk), licensed under the [Apache License 2.0](https://source.android.com/docs/setup/about/licenses)
 - [smali](https://github.com/google/smali), [multiple licenses](https://github.com/google/smali/blob/main/third_party/NOTICE)
+
+## Source and licensing
+
+Impulse ROM is a modified fork of EternityROM.
+
+Upstream:
+https://github.com/Ocin4ever/EternityROM
+
+Impulse changes:
+_not yet published — this section will be filled in once Impulse's own
+source repository is public; see `docs/source-provenance.md` in this
+checkout for the current state of that work._
+
+The ROM build project is distributed under the GNU GPL v3 in
+accordance with the upstream licence.
+
+Linux kernel source:
+see [`docs/kernel-source.md`](docs/kernel-source.md) — Impulse does not
+modify kernel source; the prebuilt kernel package's own source
+correspondence (including a currently-unresolved point) is documented there
+rather than asserted here.
+
+Kernel revision used by this release:
+see [`docs/source-provenance.md`](docs/source-provenance.md) for the
+per-release table.
+
+KernelSU-Next revision:
+see [`docs/kernel-source.md`](docs/kernel-source.md) — recorded, but not
+proven to be exactly what was compiled into the distributed kernel binary
+(explained there).
+
+Samsung proprietary firmware components are external build inputs and
+are not represented as original Impulse ROM source code. See
+[`docs/proprietary-files.md`](docs/proprietary-files.md).
 
 # Accountability
 ```cpp

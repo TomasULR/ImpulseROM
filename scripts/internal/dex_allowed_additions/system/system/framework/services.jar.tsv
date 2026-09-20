@@ -1,0 +1,4 @@
+logical_index	kind	item
+2	methods	Lcom/android/server/pm/ScanPackageUtils;->isAllowedCustomPlatformPackage(Lcom/android/internal/pm/parsing/pkg/ParsedPackage;)Z
+2	methods	Lcom/android/server/pm/ScanPackageUtils;->isSignedWithCustomPlatformKey(Lcom/android/internal/pm/parsing/pkg/ParsedPackage;)Z
+2	methods	Lcom/android/server/pm/ScanPackageUtils;->setCustomSignatures(Lcom/android/internal/pm/parsing/pkg/ParsedPackage;Lcom/android/server/pm/pkg/AndroidPackage;)V

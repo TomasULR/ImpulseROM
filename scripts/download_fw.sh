@@ -120,6 +120,33 @@ VERIFY_ODIN_PACKAGES()
         LOG_STEP_OUT
     done < <(find "$ODIN_DIR/${MODEL}_${CSC}" -type f -name "*.md5")
 }
+
+DOWNLOAD_FIRMWARE_PACKAGE()
+{
+    local SAMLOADER_RS=""
+
+    if [ -x "$TOOLS_DIR/bin/samloader-rs" ]; then
+        SAMLOADER_RS="$TOOLS_DIR/bin/samloader-rs"
+    elif type samloader-rs &> /dev/null; then
+        SAMLOADER_RS="$(command -v samloader-rs)"
+    fi
+
+    if [ "$SAMLOADER_RS" ]; then
+        "$SAMLOADER_RS" download \
+            -m "$MODEL" \
+            -r "$CSC" \
+            -v "$LATEST_FIRMWARE" \
+            -d "$ODIN_DIR/${MODEL}_${CSC}"
+        return $?
+    fi
+
+    # Anan's samloader stores its logs in the current working directory,
+    # let's move into OUT_DIR just for this time.
+    (
+    cd "$OUT_DIR" || exit 1
+    samloader -m "$MODEL" -r "$CSC" -i "$IMEI" -s "$SERIAL_NO" download -O "$ODIN_DIR/${MODEL}_${CSC}" 1> /dev/null
+    )
+}
 # ]
 
 PREPARE_SCRIPT "$@"
@@ -169,15 +196,15 @@ for i in "${FIRMWARES[@]}"; do
     COUNT=1
     # Loop infinetely until download succeeds
     while true; do
-        # shellcheck disable=SC2164
-        # Anan's samloader stores its logs in the current working directory, let's move into OUT_DIR just for this time
-        (
-        cd "$OUT_DIR"
-        samloader -m "$MODEL" -r "$CSC" -i "$IMEI" -s "$SERIAL_NO" download -O "$ODIN_DIR/${MODEL}_${CSC}" 1> /dev/null || exit 1
-        )
+        DOWNLOAD_OK=false
+        if DOWNLOAD_FIRMWARE_PACKAGE; then
+            DOWNLOAD_OK=true
+        fi
 
         ZIP_FILE="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "*.zip" | sort -r | head -n 1)"
-        if [ ! "$ZIP_FILE" ] || [ ! -f "$ZIP_FILE" ]; then
+        if ! $DOWNLOAD_OK || [ ! "$ZIP_FILE" ] || [ ! -f "$ZIP_FILE" ]; then
+            [ "$ZIP_FILE" ] && rm -f "$ZIP_FILE"
+
             if [ $COUNT -gt 10 ]; then
                 LOGW "\033[0;31m! Download failed, check your network connection or device IMEI!\033[0m"
                 exit 1

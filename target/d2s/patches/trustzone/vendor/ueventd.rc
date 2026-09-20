@@ -217,10 +217,10 @@
 /dev/nr_rfs0            0660   radio      radio
 /dev/modem_boot_spi     0660   radio      radio
 
-# xlat control
-/sys/kernel/clat/xlat_v4_addrs	0660	clat 	clat
-/sys/kernel/clat/xlat_addrs	0660	clat	clat
-/sys/kernel/clat/xlat_plat	0660	clat	clat
+# xlat control (Android 16 sysfs grammar: path attribute mode uid gid)
+/sys/kernel/clat	xlat_v4_addrs	0660	clat	clat
+/sys/kernel/clat	xlat_addrs	0660	clat	clat
+/sys/kernel/clat	xlat_plat	0660	clat	clat
 
 # interactive governor parameters
 /sys/devices/system/cpu/cpu*	cpufreq/interactive/timer_rate			0660	system	system
@@ -258,7 +258,8 @@
 /dev/iio:device*          0660   system		system
 /sys/devices/platform/10970000.spi/spi_master/spi17/spi17.0/iio:device*    buffer/enable       0660    system    system
 /sys/devices/platform/10970000.spi/spi_master/spi17/spi17.0/iio:device*    buffer/length       0660    system    system
-/sys/bus/iio/devices/iio:device*    0664   system     radio
+# The directory-only IIO rule used legacy four-field syntax and did not name a
+# sysfs attribute. Attribute-specific rules remain above and below.
 /sys/bus/iio/devices/iio:device*	poll_delay	0660	system	system
 
 # Broadcom Sensorhub Bridge Driver

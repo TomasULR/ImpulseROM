@@ -1,0 +1,3 @@
+The legacy DeKnox payload replaces vold, vdc, installd, libepm, libmdf, and
+libandroid_servers with Android 15 blobs. One UI 8.5 must keep the matching
+Android 16 source binaries until the port has completed first-boot validation.

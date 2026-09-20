@@ -35,11 +35,6 @@ SET_PROP "vendor" "ro.surface_flinger.enable_frame_rate_override" "false"
 SET_PROP "vendor" "ro.surface_flinger.use_content_detection_for_refresh_rate" "false"
 LOG_STEP_OUT
 
-LOG_STEP_IN "- Enabling Vulkan"
-SET_PROP "vendor" "ro.hwui.use_vulkan" "true"
-SET_PROP "vendor" "debug.hwui.use_hint_manager" "true"
-LOG_STEP_OUT
-
 # For some reason we are missing 2 permissions here: android.hardware.security.model.compatible and android.software.controls
 # First one is related to encryption and second one to SmartThings Device Control
 LOG "- Patching vendor permissions"
@@ -53,6 +48,20 @@ sed -i '$d' "$WORK_DIR/vendor/etc/permissions/handheld_core_hardware.xml"
     echo "    <feature name=\"android.software.controls\"/>"
     echo "</permissions>"
 } >> "$WORK_DIR/vendor/etc/permissions/handheld_core_hardware.xml"
+
+LOG "- Removing duplicate Android 16 system_ext property contexts"
+SYSTEM_EXT_PROPERTY_CONTEXTS="$WORK_DIR/system/system/system_ext/etc/selinux/system_ext_property_contexts"
+if [ -f "$SYSTEM_EXT_PROPERTY_CONTEXTS" ]; then
+    sed -i \
+        -e '/^init\.svc\.vendor\.wvkprov_server_hal[[:space:]]/d' \
+        -e '/^ro\.product\.first_api_level[[:space:]]/d' \
+        -e '/^ro\.telephony\.sim_slots\.count[[:space:]]/d' \
+        -e '/^service\.bootanim\.exit[[:space:]]/d' \
+        "$SYSTEM_EXT_PROPERTY_CONTEXTS"
+else
+    LOGW "! Missing system_ext_property_contexts; duplicate property context cleanup skipped"
+fi
+unset SYSTEM_EXT_PROPERTY_CONTEXTS
 
 LOG_STEP_IN "- Setting stock Bluetooth profiles" # from M625F 13
 SET_PROP "product" "bluetooth.profile.asha.central.enabled" "true"
@@ -78,5 +87,16 @@ SET_PROP "product" "bluetooth.profile.sap.server.enabled" "true"
 SET_PROP "product" "bluetooth.profile.ccp.server.enabled" "false"
 SET_PROP "product" "bluetooth.profile.vcp.controller.enabled" "false"
 
-ADD_TO_WORK_DIR "b0sxxx" "system" "system/apex/com.android.btservices.apex" 0 0 644 "u:object_r:system_file:s0"
+if [[ "$TARGET_SINGLE_SYSTEM_IMAGE" == "essi85" ]]; then
+    # One UI 8.5 already provides the API 36 com.android.bt APEX. Installing
+    # the Android 15 b0sxxx com.android.btservices APEX beside it creates two
+    # active modules for com.android.bluetooth; the older AdapterService lacks
+    # android.bluetooth.IAdapter and crashes system_server during user start.
+    DELETE_FROM_WORK_DIR "system" "system/apex/com.android.btservices.apex"
+    LOG "- Retaining the source Android 16 Bluetooth APEX"
+else
+    ADD_TO_WORK_DIR "b0sxxx" "system" \
+        "system/apex/com.android.btservices.apex" \
+        0 0 644 "u:object_r:system_file:s0"
+fi
 LOG_STEP_OUT

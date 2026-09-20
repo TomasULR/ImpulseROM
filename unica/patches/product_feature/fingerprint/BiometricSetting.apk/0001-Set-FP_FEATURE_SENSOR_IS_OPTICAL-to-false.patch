@@ -11,15 +11,14 @@ diff --git a/smali/com/samsung/android/biometrics/app/setting/Utils$Config.smali
 index 24d32c2..52c410c 100644
 --- a/smali/com/samsung/android/biometrics/app/setting/Utils$Config.smali
 +++ b/smali/com/samsung/android/biometrics/app/setting/Utils$Config.smali
-@@ -151,7 +151,7 @@
+@@ -225,7 +225,7 @@
  
      sput-boolean v5, Lcom/samsung/android/biometrics/app/setting/Utils$Config;->FP_FEATURE_SENSOR_IS_ULTRASONIC:Z
  
--    sput-boolean v2, Lcom/samsung/android/biometrics/app/setting/Utils$Config;->FP_FEATURE_SENSOR_IS_OPTICAL:Z
-+    sput-boolean v3, Lcom/samsung/android/biometrics/app/setting/Utils$Config;->FP_FEATURE_SENSOR_IS_OPTICAL:Z
+-    sput-boolean v3, Lcom/samsung/android/biometrics/app/setting/Utils$Config;->FP_FEATURE_SENSOR_IS_OPTICAL:Z
++    sput-boolean v2, Lcom/samsung/android/biometrics/app/setting/Utils$Config;->FP_FEATURE_SENSOR_IS_OPTICAL:Z
  
      const-string v5, "powerkey"
  
 -- 
 2.45.2
-

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <bool name="config_AFC_enabled">true</bool>
+    <!-- Afterimage (burn-in) compensation is force-disabled for the One UI 8.5
+         port. The d2s AFPC parameters below in integers.xml describe the stock
+         Android 12 data layout, but this ROM ships the r12s libandroid_servers.so,
+         whose ABC::bpProcess() expects a different layout. Feeding it the d2s
+         values makes it write out of bounds and take system_server down with
+         SIGSEGV roughly every 2-4 days of uptime. See docs/FIXES_IMPULSE.md. -->
+    <bool name="config_AFC_enabled">false</bool>
     <bool name="config_animateScreenLights">false</bool>
     <bool name="config_dynamic_automatic_brightness_available">true</bool>
     <bool name="config_hotswapCapable">true</bool>

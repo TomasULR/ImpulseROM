@@ -52,14 +52,36 @@ while read -r FILE; do
     ) &
 done <<< "$(find "$WORK_DIR/optics" -type f -name "cscfeature.xml")"
 
-# shellcheck disable=SC2046
-wait $(jobs -p) || exit 1
+WAIT_FOR_BACKGROUND_JOBS || exit 1
 LOG_STEP_OUT
 
 LOG_STEP_IN "- Patching APKs for network speed monitoring"
 
 DECODE_APK "system" "system/priv-app/SecSettings/SecSettings.apk"
 DECODE_APK "system_ext" "priv-app/SystemUI/SystemUI.apk"
+
+PATCH_NETWORK_SPEED_FEATURE_REF()
+{
+    local REL_PATH="$1"
+    local TARGET_FILE="$APKTOOL_DIR/$REL_PATH"
+
+    if [ ! -f "$TARGET_FILE" ]; then
+        local APK_PATH="${REL_PATH%%.apk/*}.apk"
+        local AFTER_APK="${REL_PATH#*.apk/}"
+        local SMALI_SUFFIX="${AFTER_APK#*/}"
+        local FOUND_FILE
+
+        FOUND_FILE=$(find "$APKTOOL_DIR/$APK_PATH" -path "*/$SMALI_SUFFIX" -print -quit 2>/dev/null || true)
+        if [ -z "$FOUND_FILE" ]; then
+            LOGW "APKTOOL file not found: /$REL_PATH; skipping network speed feature ref patch"
+            return 0
+        fi
+
+        TARGET_FILE="$FOUND_FILE"
+    fi
+
+    sed -i "s/CscFeature_Common_SupportZProjectFunctionInGlobal/CscFeature_Setting_SupportRealTimeNetworkSpeed/g" "$TARGET_FILE"
+}
 
 FTP="
 system/priv-app/SecSettings/SecSettings.apk/smali_classes4/com/samsung/android/settings/eternal/provider/items/NotificationsItem.smali
@@ -69,6 +91,6 @@ system_ext/priv-app/SystemUI/SystemUI.apk/smali/com/android/systemui/Rune.smali
 system_ext/priv-app/SystemUI/SystemUI.apk/smali/com/android/systemui/QpRune.smali
 "
 for f in $FTP; do
-    sed -i "s/CscFeature_Common_SupportZProjectFunctionInGlobal/CscFeature_Setting_SupportRealTimeNetworkSpeed/g" "$APKTOOL_DIR/$f"
+    PATCH_NETWORK_SPEED_FEATURE_REF "$f"
 done
 LOG_STEP_OUT

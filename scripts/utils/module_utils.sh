@@ -51,6 +51,21 @@ ABORT()
     return 1
 }
 
+# Wait for every job started by a module and preserve any failure. `wait` with
+# multiple PID arguments returns only the status of the last PID and can hide
+# an earlier failed blob copy or patch operation.
+WAIT_FOR_BACKGROUND_JOBS()
+{
+    local STATUS=0
+    local PID
+
+    for PID in $(jobs -p); do
+        wait "$PID" || STATUS=1
+    done
+
+    return "$STATUS"
+}
+
 # APPLY_PATCH <partition> <apk/jar> <patch>
 # Applies a unified diff patch to the provided APK/JAR decoded directory.
 APPLY_PATCH()
@@ -79,8 +94,35 @@ APPLY_PATCH()
 
     DECODE_APK "$PARTITION" "$FILE" || return 1
 
-    LOG "- Applying \"$(grep "^Subject:" "$PATCH" | sed "s/.*PATCH] //; s/.*PATCH .\/.] //")\" to /$PARTITION/$FILE"
-    EVAL "cd \"$APKTOOL_DIR/$PARTITION/${FILE//system\//}\"; patch -p1 -s -t -N --no-backup-if-mismatch < \"$PATCH\"; cd - &> /dev/null"
+    local SUBJECT
+    SUBJECT="$(grep "^Subject:" "$PATCH" | sed "s/.*PATCH] //; s/.*PATCH .\/.] //")"
+    local PATCH_TARGET_DIR="$APKTOOL_DIR/$PARTITION/${FILE//system\//}"
+
+    # patch(1) applies the hunks it can match and drops the rest into .rej files,
+    # so the previous "cd ...; patch ...; cd -" form returned cd's exit code and
+    # silently shipped half-patched smali. Verify the whole patch applies at
+    # exact context first (--fuzz=0): a smali patch that only lands with fuzz has
+    # drifted against the current source, and for label-renumbering grafts a
+    # fuzzy apply produces duplicate labels or wrong jumps. Never apply partially.
+    if ( cd "$PATCH_TARGET_DIR" && patch -p1 -s -t -N --fuzz=0 --dry-run < "$PATCH" ) &> /dev/null; then
+        LOG "- Applying \"$SUBJECT\" to /$PARTITION/$FILE"
+        EVAL "( cd \"$PATCH_TARGET_DIR\" && patch -p1 -s -t -N --fuzz=0 --no-backup-if-mismatch < \"$PATCH\" )" || return 1
+        return 0
+    fi
+
+    # The patch does not apply at exact context. PATCH_DRIFT_POLICY=skip keeps the
+    # target at clean stock (no partial hunks) and records it for rebasing; the
+    # default fails the build so drift can never reach a flashable ZIP unnoticed.
+    if [[ "${PATCH_DRIFT_POLICY:-fail}" == "skip" ]]; then
+        LOGW "SKIPPING drifted patch, keeping /$PARTITION/$FILE at stock: \"$SUBJECT\""
+        printf '%s\t%s\t%s\n' "$PARTITION" "$FILE" "${PATCH//$SRC_DIR\//}" \
+            >> "${PATCH_DRIFT_REPORT:-$OUT_DIR/skipped_patches.tsv}"
+        return 0
+    fi
+
+    LOGE "Patch does not apply at exact context (drifted): ${PATCH//$SRC_DIR\//}"
+    LOGE "Set PATCH_DRIFT_POLICY=skip to keep this file at stock for a first-boot build."
+    return 1
 }
 
 # DECODE_APK <partition> <apk/jar>

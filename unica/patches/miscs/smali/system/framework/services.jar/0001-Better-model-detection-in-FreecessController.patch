@@ -9,13 +9,13 @@ index 84b8f2c9..6f255377 100644
 --- a/smali/com/android/server/am/FreecessController.smali
 +++ b/smali/com/android/server/am/FreecessController.smali
 @@ -193,7 +193,7 @@
+ .method static constructor <clinit>()V
+     .locals 5
  
-     sput-object v2, Lcom/android/server/am/FreecessController;->productModel:Ljava/lang/String;
+-    const-string/jumbo v0, "ro.product.model"
++    const-string/jumbo v0, "ro.product.vendor.model"
  
--    const-string/jumbo v2, "ro.product.model"
-+    const-string/jumbo v2, "ro.product.vendor.model"
- 
-     invoke-static {v2}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
  
 -- 
 2.46.0

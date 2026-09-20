@@ -1,0 +1,64 @@
+From 0f4d39620d84ba42c2c7b62c4a8b9da8cb551f62 Mon Sep 17 00:00:00 2001
+From: EternityROM <eternityrom@localhost>
+Date: Mon, 10 Aug 2026 00:30:00 +0200
+Subject: [PATCH] Allow Secure Folder on unlocked d2s
+
+The One UI 8.5 Secure Folder setup asks DarManagerService to generate and
+attest KnoxTestKey.  Exynos9825 can generate the key, but its genuine SAK
+certificate reports TrustBoot/Warranty/ICD/Kernel as abnormal after the
+bootloader, boot image and kernel are modified.  DarManagerService therefore
+returns false from isKnoxKeyInstallable and Secure Folder shows the
+"unauthorized software" failure dialog.
+
+Bypass only the framework consumers of those irreversible root/integrity
+signals.  Do not start KnoxGuard, alter EFS, rewrite the certificate, or touch
+any persistent security state.  These returns match the Android 16 UN1CA
+KnoxPatch implementation, rebased to the d2s 25Q4 services.jar.
+---
+ .../android/server/StorageManagerService.smali    | 4 ++++
+ .../server/knox/dar/DarManagerService.smali       | 8 ++++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/smali/com/android/server/StorageManagerService.smali b/smali/com/android/server/StorageManagerService.smali
+index c5f835e101..979c65ef07 100644
+--- a/smali/com/android/server/StorageManagerService.smali
++++ b/smali/com/android/server/StorageManagerService.smali
+@@ -1695,6 +1695,10 @@
+ .method public static isRootedDevice()Z
+     .locals 15
+ 
++    const/4 v0, 0x0
++
++    return v0
++
+     const-string/jumbo v0, "ro.boot.flash.locked"
+ 
+     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+diff --git a/smali/com/android/server/knox/dar/DarManagerService.smali b/smali/com/android/server/knox/dar/DarManagerService.smali
+index 635886b425..538bf28a57 100644
+--- a/smali/com/android/server/knox/dar/DarManagerService.smali
++++ b/smali/com/android/server/knox/dar/DarManagerService.smali
+@@ -572,6 +572,10 @@
+ .method public final checkDeviceIntegrity([Ljava/security/cert/Certificate;)Z
+     .locals 3
+ 
++    const/4 v0, 0x1
++
++    return v0
++
+     const/4 v0, 0x0
+ 
+     aget-object p1, p1, v0
+@@ -1722,6 +1726,10 @@
+ .method public final isDeviceRootKeyInstalled()Z
+     .locals 10
+ 
++    const/4 v0, 0x1
++
++    return v0
++
+     const-string/jumbo v0, "ro.hardware.virtual_device"
+ 
+     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+-- 
+2.43.0

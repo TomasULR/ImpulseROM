@@ -1,0 +1,205 @@
+From 96c2ab1ebce836d849301ed518fd2887693f97de Mon Sep 17 00:00:00 2001
+From: EternityROM <eternityrom@localhost>
+Date: Mon, 10 Aug 2026 01:20:00 +0200
+Subject: [PATCH] Fix EAD framework resource IDs for API 36
+
+EnvironmentAdaptiveDisplay comes from the API 35 e2s target firmware while
+framework-res is supplied by the API 36 source. Samsung inserted resources in
+the framework array table, so the APK's compiled numeric IDs resolve to the
+wrong entries (or null). This crashes getWhiteRGBOffsetArray on every service
+start and makes the display brightness pipeline repeatedly fall back to zero.
+
+Rebase every framework array used by the e2s EAD implementation to its named
+API 36 counterpart. The names and array shapes are verified against the source
+framework-res table; no feature behavior is otherwise changed.
+---
+ .../android/sead/EadFlickerController.smali   |  8 ++++----
+ .../android/sead/EadLuxController.smali       |  8 ++++----
+ .../EnvironmentAdaptiveDisplayService.smali   | 22 +++++++++++-----------
+ 3 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/smali/com/samsung/android/sead/EadFlickerController.smali b/smali/com/samsung/android/sead/EadFlickerController.smali
+index 377fda27da..d5438c6610 100644
+--- a/smali/com/samsung/android/sead/EadFlickerController.smali
++++ b/smali/com/samsung/android/sead/EadFlickerController.smali
+@@ -876,7 +876,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x1070054
++    const v1, 0x107005d
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -888,7 +888,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x1070058
++    const v2, 0x1070061
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -900,7 +900,7 @@
+ 
+     move-result-object v2
+ 
+-    const v3, 0x1070056
++    const v3, 0x107005f
+ 
+     invoke-virtual {v2, v3}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -912,7 +912,7 @@
+ 
+     move-result-object v2
+ 
+-    const v3, 0x107005a
++    const v3, 0x1070063
+ 
+     invoke-virtual {v2, v3}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+diff --git a/smali/com/samsung/android/sead/EadLuxController.smali b/smali/com/samsung/android/sead/EadLuxController.smali
+index 926805785e..7b703693c3 100644
+--- a/smali/com/samsung/android/sead/EadLuxController.smali
++++ b/smali/com/samsung/android/sead/EadLuxController.smali
+@@ -1197,7 +1197,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x1070053
++    const v1, 0x107005c
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -1209,7 +1209,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x1070057
++    const v2, 0x1070060
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -1221,7 +1221,7 @@
+ 
+     move-result-object v2
+ 
+-    const v3, 0x1070055
++    const v3, 0x107005e
+ 
+     invoke-virtual {v2, v3}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -1233,7 +1233,7 @@
+ 
+     move-result-object v2
+ 
+-    const v3, 0x1070059
++    const v3, 0x1070062
+ 
+     invoke-virtual {v2, v3}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+diff --git a/smali/com/samsung/android/sead/EnvironmentAdaptiveDisplayService.smali b/smali/com/samsung/android/sead/EnvironmentAdaptiveDisplayService.smali
+index e48152f686..d085547ddc 100644
+--- a/smali/com/samsung/android/sead/EnvironmentAdaptiveDisplayService.smali
++++ b/smali/com/samsung/android/sead/EnvironmentAdaptiveDisplayService.smali
+@@ -1090,7 +1090,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x1070046
++    const v1, 0x107004a
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -2905,7 +2905,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x107005b
++    const v1, 0x1070064
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -2923,7 +2923,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x107005c
++    const v1, 0x1070065
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -2943,7 +2943,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x1070061
++    const v2, 0x107006a
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -2959,7 +2959,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x1070062
++    const v2, 0x107006b
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getIntArray(I)[I
+ 
+@@ -2975,7 +2975,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x107005d
++    const v2, 0x1070066
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+@@ -2995,7 +2995,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x107005e
++    const v2, 0x1070067
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+@@ -3019,7 +3019,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x107005f
++    const v2, 0x1070068
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+@@ -3039,7 +3039,7 @@
+ 
+     move-result-object v1
+ 
+-    const v2, 0x1070060
++    const v2, 0x1070069
+ 
+     invoke-virtual {v1, v2}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+@@ -3058,7 +3058,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x107006b
++    const v1, 0x1070075
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+@@ -3072,7 +3072,7 @@
+ 
+     move-result-object v0
+ 
+-    const v1, 0x1070049
++    const v1, 0x107004e
+ 
+     invoke-virtual {v0, v1}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;
+ 
+-- 
+2.43.0

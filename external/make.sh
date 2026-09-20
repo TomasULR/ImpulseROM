@@ -133,6 +133,7 @@ APKTOOL=true
 EROFS_UTILS=true
 IMG2SDAT=true
 SAMLOADER=true
+SAMLOADER_RS=true
 SIGNAPK=true
 SMALI=true
 OMCDECODER=true
@@ -162,6 +163,10 @@ SAMLOADER_EXEC=(
     "../venv/bin/samloader"
 )
 CHECK_TOOLS "${SAMLOADER_EXEC[@]}" && SAMLOADER=false
+SAMLOADER_RS_EXEC=(
+    "samloader-rs"
+)
+CHECK_TOOLS "${SAMLOADER_RS_EXEC[@]}" && SAMLOADER_RS=false
 SIGNAPK_EXEC=(
     "signapk" "signapk.jar"
 )
@@ -181,8 +186,10 @@ if [[ "$1" == "--check-tools" ]]; then
             ! $EROFS_UTILS && \
             ! $IMG2SDAT && \
             ! $SAMLOADER && \
+            ! $SAMLOADER_RS && \
             ! $SIGNAPK && \
-            ! $SMALI; then
+            ! $SMALI && \
+            ! $OMCDECODER; then
         exit 0
     else
         exit 1
@@ -249,6 +256,35 @@ if $SAMLOADER; then
     )
 
     BUILD "samloader" "$SRC_DIR/external/samloader" "${SAMLOADER_CMDS[@]}"
+fi
+if $SAMLOADER_RS; then
+    SAMLOADER_RS_VERSION="2.0.0"
+    case "$(uname -m)" in
+        x86_64)
+            SAMLOADER_RS_ARCH="x86_64"
+            SAMLOADER_RS_SHA256="7c6514028f20d5ea0eb57d6f872eee41b3a52336eabac6379b15a01a06ed7a79"
+            ;;
+        aarch64)
+            SAMLOADER_RS_ARCH="aarch64"
+            SAMLOADER_RS_SHA256="9703e49e944d27dc5ac973492bf706035fe5aadc1b10d3a3a68f33f50d91b977"
+            ;;
+        *)
+            LOGE "Unsupported samloader-rs host architecture: $(uname -m)"
+            exit 1
+            ;;
+    esac
+    SAMLOADER_RS_ARCHIVE="$TOOLS_DIR/samloader-v${SAMLOADER_RS_VERSION}-linux-${SAMLOADER_RS_ARCH}.tar.xz"
+    SAMLOADER_RS_URL="https://github.com/topjohnwu/samloader-rs/releases/download/${SAMLOADER_RS_VERSION}/$(basename "$SAMLOADER_RS_ARCHIVE")"
+    SAMLOADER_RS_CMDS=(
+        "curl --fail --location --retry 5 --output \"$SAMLOADER_RS_ARCHIVE\" \"$SAMLOADER_RS_URL\""
+        "printf '%s  %s\\n' \"$SAMLOADER_RS_SHA256\" \"$SAMLOADER_RS_ARCHIVE\" | sha256sum --check --strict -"
+        "tar -xJf \"$SAMLOADER_RS_ARCHIVE\" -C \"$TOOLS_DIR\""
+        "mv -f \"$TOOLS_DIR/samloader\" \"$TOOLS_DIR/bin/samloader-rs\""
+        "chmod 0755 \"$TOOLS_DIR/bin/samloader-rs\""
+        "rm -f \"$SAMLOADER_RS_ARCHIVE\""
+    )
+
+    BUILD "samloader-rs $SAMLOADER_RS_VERSION" "$SRC_DIR" "${SAMLOADER_RS_CMDS[@]}"
 fi
 if $SIGNAPK; then
     SIGNAPK_CMDS=(

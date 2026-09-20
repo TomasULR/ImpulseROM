@@ -8,10 +8,10 @@ Signed-off-by: ExtremeXT <75576145+ExtremeXT@users.noreply.github.com>
  .../controller/SecOutDoorModePreferenceController.smali   | 8 +-------
  1 file changed, 1 insertion(+), 7 deletions(-)
 
-diff --git a/smali_classes4/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali b/smali_classes4/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
+diff --git a/smali_classes5/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali b/smali_classes5/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
 index 1a10f3c..43eaefa 100644
---- a/smali_classes4/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
-+++ b/smali_classes4/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
+--- a/smali_classes5/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
++++ b/smali_classes5/com/samsung/android/settings/display/controller/SecOutDoorModePreferenceController.smali
 @@ -61,13 +61,7 @@
  .method public final isAvailable()Z
      .locals 0

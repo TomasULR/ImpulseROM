@@ -40,6 +40,15 @@ system/priv-app/sec_camerax_service
 system/priv-app/VideoScan
 "
 
+# The S24 FE donor ships the 64-bit MassCameraApp stack. Note10+ keeps its
+# proven camera HAL/application path during initial API 36 bring-up.
+if [[ "${SOURCE_HAS_MASS_CAMERA_APP:-false}" == "true" && \
+        "${TARGET_HAS_MASS_CAMERA_APP:-false}" != "true" ]]; then
+    SYSTEM_DEBLOAT+="
+system/priv-app/MassCameraApp
+"
+fi
+
 # Wi-Fi Hotspot Overlays
 PRODUCT_DEBLOAT+="
 overlay/SoftapOverlay6GHz

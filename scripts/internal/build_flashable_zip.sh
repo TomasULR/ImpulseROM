@@ -19,6 +19,9 @@
 # [
 source "$SRC_DIR/scripts/utils/build_utils.sh" || exit 1
 
+SOURCE_FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$SOURCE_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$SOURCE_FIRMWARE")"
+TARGET_FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$TARGET_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$TARGET_FIRMWARE")"
+
 SOURCE_FINGERPRINT="$(GET_PROP "$WORK_DIR/system/system/build.prop" "ro.system.build.fingerprint")"
 SOURCE_FINGERPRINT="${SOURCE_FINGERPRINT//$(GET_PROP "$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/build.prop" "ro.build.product")/$(GET_PROP "$FW_DIR/$SOURCE_FIRMWARE_PATH/vendor/build.prop" "ro.product.vendor.device")}"
 TARGET_FINGERPRINT="$(GET_PROP "$WORK_DIR/vendor/build.prop" "ro.vendor.build.fingerprint")"
@@ -31,17 +34,17 @@ $ROM_IS_OFFICIAL && ROM_STATUS="OFFICIAL"
 
 ZIP_FILE_SUFFIX="-sign.zip"
 $DEBUG && ! $ROM_IS_OFFICIAL && ZIP_FILE_SUFFIX=".zip"
-FILE_NAME="EternityROM_${ROM_VERSION}_${ROM_COMMIT}_$(date +%Y%m%d)_${TARGET_CODENAME}${ZIP_FILE_SUFFIX}"
+FILE_NAME="ImpulseROM_${ROM_VERSION}_${ROM_COMMIT}_$(date +%Y%m%d)_${TARGET_CODENAME}${ZIP_FILE_SUFFIX}"
 while [ -f "$OUT_DIR/$FILE_NAME" ]; do
     INCREMENTAL=$((INCREMENTAL + 1))
-    FILE_NAME="EternityROM_${ROM_VERSION}_${ROM_COMMIT}_$(date +%Y%m%d)_${INCREMENTAL}_${TARGET_CODENAME}${ZIP_FILE_SUFFIX}"
+    FILE_NAME="ImpulseROM_${ROM_VERSION}_${ROM_COMMIT}_$(date +%Y%m%d)_${INCREMENTAL}_${TARGET_CODENAME}${ZIP_FILE_SUFFIX}"
 done
 
 PRIVATE_KEY_PATH="$SRC_DIR/security/"
 PUBLIC_KEY_PATH="$SRC_DIR/security/"
 if $ROM_IS_OFFICIAL; then
-    PRIVATE_KEY_PATH+="eternityrom"
-    PUBLIC_KEY_PATH+="eternityrom"
+    PRIVATE_KEY_PATH+="impulse"
+    PUBLIC_KEY_PATH+="impulse"
 else
     PRIVATE_KEY_PATH+="aosp"
     PUBLIC_KEY_PATH+="aosp"
@@ -94,15 +97,97 @@ BUILD_SUPER_EMPTY()
     EVAL "$CMD" || exit 1
 }
 
+WAIT_FOR_BACKGROUND_JOBS()
+{
+    local STATUS=0
+    local PID
+
+    for PID in $(jobs -p); do
+        wait "$PID" || STATUS=1
+    done
+
+    return "$STATUS"
+}
+
+RECORD_PARTITION_IMAGE_SIZES()
+{
+    local IMAGE
+    local IMAGE_BYTES
+    local PARTITION
+    local SIZE_FILE="$TMP_DIR/.partition_image_sizes"
+
+    : > "$SIZE_FILE"
+    while IFS= read -r IMAGE; do
+        PARTITION="$(basename "$IMAGE" .img)"
+        IS_VALID_PARTITION_NAME "$PARTITION" || continue
+        IMAGE_BYTES="$(GET_IMAGE_SIZE "$IMAGE")" || exit 1
+        printf '%s=%s\n' "$PARTITION" "$IMAGE_BYTES" >> "$SIZE_FILE"
+    done < <(find "$TMP_DIR" -maxdepth 1 -type f -name '*.img' | sort)
+}
+
 GENERATE_BUILD_INFO()
 {
     local BUILD_INFO_FILE="$TMP_DIR/build_info.txt"
+    local DISABLED_MODULES
+    local FIRMWARE_PATH
+    local MULTILIB_REPORT="$OUT_DIR/multilib_firmware_validation.json"
+    local PARTITION
+    local BLOCKS
+    local IMAGE_BYTES
+
+    DISABLED_MODULES="$({
+        find "$SRC_DIR/unica" "$SRC_DIR/platform/$TARGET_PLATFORM" \
+            "$SRC_DIR/target/$TARGET_CODENAME" -type f -name disable \
+            -printf '%p\n' 2> /dev/null || true
+    } | sed "s|$SRC_DIR/||" | sort | paste -sd, -)"
 
     {
         echo "device=$TARGET_CODENAME"
         echo "version=$ROM_VERSION"
+        echo "commit=$ROM_COMMIT"
         echo "timestamp=$ROM_BUILD_TIMESTAMP"
+        echo "source_firmware=${SOURCE_FIRMWARE%/*}"
+        echo "source_firmware_version=$(cat "$FW_DIR/$SOURCE_FIRMWARE_PATH/.extracted" 2> /dev/null)"
+        echo "target_firmware=${TARGET_FIRMWARE%/*}"
+        echo "target_firmware_version=$(cat "$FW_DIR/$TARGET_FIRMWARE_PATH/.extracted" 2> /dev/null)"
+        if [ -n "${MULTILIB_FIRMWARE:-}" ]; then
+            FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$MULTILIB_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$MULTILIB_FIRMWARE")"
+            echo "multilib_firmware=${MULTILIB_FIRMWARE%/*}"
+            echo "multilib_firmware_version=$(cat "$FW_DIR/$FIRMWARE_PATH/.extracted" 2> /dev/null)"
+        fi
+        echo "source_fingerprint=$SOURCE_FINGERPRINT"
+        echo "target_fingerprint=$TARGET_FINGERPRINT"
+        echo "sdk=$(GET_PROP "system" "ro.build.version.sdk")"
+        echo "oneui=$(GET_PROP "system" "ro.build.version.oneui")"
         echo "security_patch_version=$(GET_PROP "system" "ro.build.version.security_patch")"
+        echo "selinux_expected=enforcing"
+        echo "work_dir_hash=$(cat "$WORK_DIR/.completed" 2> /dev/null)"
+        echo "disabled_modules=$DISABLED_MODULES"
+        echo "include_kernelsu_manager=${INCLUDE_KERNELSU_MANAGER:-false}"
+        echo "include_legacy_wfd=${INCLUDE_LEGACY_WFD:-false}"
+        echo "system_partition_limit=$TARGET_SYSTEM_PARTITION_SIZE"
+        echo "prism_partition_limit=$TARGET_PRISM_PARTITION_SIZE"
+        echo "optics_partition_limit=$TARGET_OPTICS_PARTITION_SIZE"
+        echo "assembled_work_validation=passed"
+        if [ -f "$MULTILIB_REPORT" ]; then
+            echo "multilib_validation_sha256=$(sha256sum "$MULTILIB_REPORT" | cut -d ' ' -f 1)"
+        fi
+        if [ -f /usr/local/share/oneui85-builder/packages.txt ]; then
+            echo "builder_packages_sha256=$(sha256sum /usr/local/share/oneui85-builder/packages.txt | cut -d ' ' -f 1)"
+        fi
+        for PARTITION in system vendor product odm prism optics; do
+            IMAGE_BYTES="$(sed -n "s/^${PARTITION}=//p" "$TMP_DIR/.partition_image_sizes" 2> /dev/null)"
+            [ -n "$IMAGE_BYTES" ] && \
+                echo "${PARTITION}_image_bytes=$IMAGE_BYTES"
+            if [ -f "$TMP_DIR/$PARTITION.transfer.list" ]; then
+                BLOCKS="$(sed -n '2p' "$TMP_DIR/$PARTITION.transfer.list")"
+                echo "${PARTITION}_transferred_bytes=$((BLOCKS * 4096))"
+            fi
+        done
+        for FIRMWARE_PATH in boot.img dtb.img dtbo.img init_boot.img vendor_boot.img; do
+            [ -f "$TMP_DIR/$FIRMWARE_PATH" ] || continue
+            echo "${FIRMWARE_PATH%.img}_sha256=$(sha256sum "$TMP_DIR/$FIRMWARE_PATH" | cut -d ' ' -f 1)"
+        done
     } > "$BUILD_INFO_FILE"
 }
 
@@ -214,12 +299,13 @@ GENERATE_OTA_METADATA()
     local PROTO_FILE="$SRC_DIR/external/android-tools/vendor/build/tools/releasetools/ota_metadata.proto"
 
     local INCREMENTAL
-    local RELEASE
+    local SDK_LEVEL
     local SECURITY_PATCH_LEVEL
     local TIMESTAMP
 
     INCREMENTAL="$(GET_PROP "system" "ro.build.version.incremental")"
-    RELEASE="$(GET_PROP "system" "ro.build.version.release")"
+    SDK_LEVEL="$(GET_PROP "system" "ro.build.version.sdk")"
+    [ -z "$SDK_LEVEL" ] && SDK_LEVEL="$SOURCE_API_LEVEL"
     SECURITY_PATCH_LEVEL="$(GET_PROP "system" "ro.build.version.security_patch")"
     TIMESTAMP="$(GET_PROP "system" "ro.build.date.utc")"
 
@@ -235,7 +321,7 @@ GENERATE_OTA_METADATA()
         MESSAGE+=", build: \\\"$SOURCE_FINGERPRINT\\\""
         MESSAGE+=", build_incremental: \\\"$INCREMENTAL\\\""
         MESSAGE+=", timestamp: $TIMESTAMP"
-        MESSAGE+=", sdk_level: \\\"$RELEASE\\\""
+        MESSAGE+=", sdk_level: \\\"$SDK_LEVEL\\\""
         MESSAGE+=", security_patch_level: \\\"$SECURITY_PATCH_LEVEL\\\"}"
 
         EVAL "protoc --encode=build.tools.releasetools.OtaMetadata --proto_path=\"$(dirname "$PROTO_FILE")\" \"$PROTO_FILE\" <<< \"$MESSAGE\" > \"$TMP_DIR/META-INF/com/android/metadata.pb\"" || exit 1
@@ -247,11 +333,60 @@ GENERATE_OTA_METADATA()
         echo "ota-type=BLOCK"
         echo "post-build=$SOURCE_FINGERPRINT"
         echo "post-build-incremental=$INCREMENTAL"
-        echo "post-sdk-level=$RELEASE"
+        echo "post-sdk-level=$SDK_LEVEL"
         echo "post-security-patch-level=$SECURITY_PATCH_LEVEL"
         echo "post-timestamp=$TIMESTAMP"
         echo "pre-device=$TARGET_CODENAME"
     } > "$TMP_DIR/META-INF/com/android/metadata"
+}
+
+VALIDATE_FIXED_PARTITION_IMAGE_SIZE()
+{
+    local PARTITION="$1"
+    local LIMIT="$2"
+    local IMAGE="$TMP_DIR/$PARTITION.img"
+    local ACTUAL
+    local HEADROOM
+
+    [[ "$LIMIT" == "none" || -z "$LIMIT" ]] && return 0
+    if ! [[ "$LIMIT" =~ ^[0-9]+$ ]] || [ "$LIMIT" -le 0 ]; then
+        LOGE "Invalid $PARTITION partition size limit: $LIMIT"
+        exit 1
+    fi
+    [ -f "$IMAGE" ] || return 0
+
+    # Images are Android sparse at this point. The sparse container length can
+    # be much smaller than the filesystem TWRP will expand onto the block
+    # device, so enforce the physical ceiling against total_blks * blk_sz.
+    ACTUAL="$(GET_IMAGE_SIZE "$IMAGE")" || exit 1
+    if [ "$ACTUAL" -gt "$LIMIT" ]; then
+        LOGE "$PARTITION.img expands to $ACTUAL bytes but the physical partition is only $LIMIT bytes"
+        exit 1
+    fi
+
+    HEADROOM="$((LIMIT - ACTUAL))"
+    LOG "- $PARTITION.img physical headroom: $HEADROOM bytes"
+}
+
+VALIDATE_ZIP_PACKAGE_REFERENCES()
+{
+    local SCRIPT_FILE="$TMP_DIR/META-INF/com/google/android/updater-script"
+    local ZIP_FILE="$OUT_DIR/$FILE_NAME"
+    local ENTRY
+
+    [ -f "$SCRIPT_FILE" ] || {
+        LOGE "File not found: ${SCRIPT_FILE//$SRC_DIR\//}"
+        exit 1
+    }
+
+    while IFS= read -r ENTRY; do
+        [ -z "$ENTRY" ] && continue
+
+        if ! unzip -l "$ZIP_FILE" "$ENTRY" &> /dev/null; then
+            LOGE "updater-script references \"$ENTRY\" but it is missing from the zip"
+            exit 1
+        fi
+    done < <(grep -oE 'package_extract_file\("[^"]+"' "$SCRIPT_FILE" | cut -d'"' -f2 | sort -u)
 }
 
 GENERATE_UPDATER_SCRIPT()
@@ -304,8 +439,13 @@ GENERATE_UPDATER_SCRIPT()
             for i in "${TARGET_ASSERT_MODEL[@]}"; do
                 echo -n 'getprop("ro.boot.em.model") == "'
                 echo -n "$i"
+                echo -n '" || getprop("ro.product.model") == "'
+                echo -n "$i"
                 echo -n '" || '
             done
+            echo -n 'getprop("ro.product.device") == "'
+            echo -n "$TARGET_CODENAME"
+            echo -n '" || '
             echo -n 'abort("E3004: This package is for \"'
             echo -n "$TARGET_CODENAME"
             echo    '\" devices; this is a \"" + getprop("ro.product.device") + "\".");'
@@ -535,13 +675,18 @@ GENERATE_UPDATER_SCRIPT()
 
         echo -e "\n"
         echo    'ui_print("Cleaning up...");'
-        echo    'package_extract_file("cleanup.sh", "/scripts/cleanup.sh");'
-        echo    'set_metadata("/scripts/cleanup.sh", "uid", 0, "gid", 0, "dmode", 0755, "fmode", 0755);'
-        echo    'run_program("/scripts/cleanup.sh");'
+        echo    'ifelse(package_extract_file("scripts/cleanup.sh", "/tmp/cleanup.sh"),'
+        echo    '    (run_program("/sbin/sh", "/tmp/cleanup.sh");'
+        echo    '     ui_print("Cache cleanup finished")),'
+        echo    '    ui_print("! cleanup.sh missing in package, skipping cache cleanup"));'
 
         echo -e "\n"
         echo    'set_progress(1);'
         echo    'ui_print("****************************************************");'
+        echo    'ui_print(" ");'
+        echo    'ui_print("            . . . . . . . . . . . . . .            ");'
+        echo    'ui_print("               Made in Czech Republic              ");'
+        echo    'ui_print("            . . . . . . . . . . . . . .            ");'
         echo    'ui_print(" ");'
     } > "$SCRIPT_FILE"
 }
@@ -594,9 +739,10 @@ PRINT_HEADER()
     echo    'ui_print(" ");'
     echo    'ui_print("****************************************************");'
     echo -n 'ui_print("'
-    echo -n "EternityROM $ROM_VERSION for $TARGET_NAME"
+    echo -n "Impulse ROM $ROM_VERSION for $TARGET_NAME"
     echo    '");'
-    echo    'ui_print("ROM by Ocin4ever @XDAforums");'
+    echo    'ui_print("Impulse ROM by TomasULR");'
+    echo    'ui_print("Based on EternityROM by Ocin4ever @XDAforums");'
     echo    'ui_print("Build system coded by salvo_giangri @XDAforums");'
     echo    'ui_print("****************************************************");'
     echo -n 'ui_print("'
@@ -641,16 +787,34 @@ while IFS= read -r f; do
         else
             FILESYSTEM_TYPE="$TARGET_OS_FILE_SYSTEM"
         fi
+        FS_IMAGE_INPUT_DIR="$WORK_DIR/$PARTITION"
+        # A conventional (non system-as-root) mount of "system" expects its
+        # own content directly at the mount point. The donor's system-as-root
+        # tree nests that content one level deeper, under a "system/" folder
+        # that mirrors the root-stub symlinks (bin -> /system/bin, etc.) meant
+        # for a real root mount. Package the inner, flat tree instead so the
+        # existing device-absolute file_contexts (/system/bin, ...) resolve
+        # correctly once mkfs computes each file's path as mount-point + path.
+        if [[ "$PARTITION" == "system" ]] && [[ "${TARGET_SYSTEM_AS_ROOT:-true}" != "true" ]]; then
+            FS_IMAGE_INPUT_DIR="$WORK_DIR/system/system"
+        fi
         "$SRC_DIR/scripts/build_fs_image.sh" "$FILESYSTEM_TYPE" \
             -o "$TMP_DIR/$PARTITION.img" -S \
-            "$WORK_DIR/$PARTITION" "$WORK_DIR/configs/file_context-$PARTITION" "$WORK_DIR/configs/fs_config-$PARTITION" || exit 1
+            "$FS_IMAGE_INPUT_DIR" "$WORK_DIR/configs/file_context-$PARTITION" "$WORK_DIR/configs/fs_config-$PARTITION" || exit 1
         LOG_STEP_OUT
     ) &
 done < <(find "$WORK_DIR" -maxdepth 1 -type d)
 LOG_STEP_OUT
 
-# shellcheck disable=SC2046
-wait $(jobs -p) || exit 1
+WAIT_FOR_BACKGROUND_JOBS || exit 1
+
+LOG "- Recording expanded partition image sizes"
+RECORD_PARTITION_IMAGE_SIZES
+
+LOG "- Validating fixed partition image sizes"
+VALIDATE_FIXED_PARTITION_IMAGE_SIZE "system" "$TARGET_SYSTEM_PARTITION_SIZE"
+VALIDATE_FIXED_PARTITION_IMAGE_SIZE "prism" "$TARGET_PRISM_PARTITION_SIZE"
+VALIDATE_FIXED_PARTITION_IMAGE_SIZE "optics" "$TARGET_OPTICS_PARTITION_SIZE"
 
 if [ "$TARGET_SUPER_PARTITION_SIZE" -ne 0 ]; then
     LOG "- Building unsparse_super_empty.img"
@@ -679,8 +843,7 @@ while IFS= read -r f; do
     ) &
 done < <(find "$TMP_DIR" -maxdepth 1 -type f -name "*.img")
 
-# shellcheck disable=SC2046
-wait $(jobs -p) || exit 1
+WAIT_FOR_BACKGROUND_JOBS || exit 1
 
 if [ -d "$WORK_DIR/kernel" ]; then
     while IFS= read -r f; do
@@ -705,8 +868,10 @@ LOG "- Generating OTA metadata"
 GENERATE_OTA_METADATA
 
 LOG "- Creating zip"
-[ -f "$OUT_DIR/rom.zip" ] && rm -f "$OUT_DIR/rom.zip"
-cd "$TMP_DIR" ; zip -rq ../rom.zip ./* ; cd - &> /dev/null
-mv -f "$TMP_DIR/rom.zip" "$OUT_DIR/$FILE_NAME"
+rm -f "$OUT_DIR/rom.zip" "$OUT_DIR/$FILE_NAME"
+(cd "$TMP_DIR" && zip -rq "$OUT_DIR/$FILE_NAME" ./*) || exit 1
+
+LOG "- Validating updater-script package references"
+VALIDATE_ZIP_PACKAGE_REFERENCES
 
 exit 0

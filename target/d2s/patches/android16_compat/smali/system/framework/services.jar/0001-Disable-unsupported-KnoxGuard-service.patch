@@ -1,0 +1,35 @@
+From 2f46cbe9a24e9c8d6aab92f07bb7a2532580938a Mon Sep 17 00:00:00 2001
+From: EternityROM <eternityrom@localhost>
+Date: Sun, 9 Aug 2026 18:30:00 +0200
+Subject: [PATCH] Disable unsupported KnoxGuard service on d2s
+
+The Android 16 framework expects the modern
+vendor.samsung.hardware.tlc.kg AIDL provider. Exynos9825 firmware does not
+ship that provider, so KnoxGuard interprets the unavailable TA as Error and
+sets a remote lock even though the kernel reports device_locked=0.
+
+Keep the port from starting this unsupported framework consumer. This does
+not alter EFS, persistent KnoxGuard data, or any hardware lock state.
+---
+ smali/com/android/server/SystemServer.smali | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/smali/com/android/server/SystemServer.smali b/smali/com/android/server/SystemServer.smali
+index 0d24a96c38..6b318ba580 100644
+--- a/smali/com/android/server/SystemServer.smali
++++ b/smali/com/android/server/SystemServer.smali
+@@ -10092,11 +10092,7 @@
+ 
+     invoke-virtual {v2}, Landroid/util/TimingsTraceLog;->traceEnd()V
+ 
+-    invoke-static {}, Landroid/os/FactoryTest;->isFactoryBinary()Z
+-
+-    move-result v0
+-
+-    if-nez v0, :cond_3a
++    goto :cond_3a
+ 
+     const-string/jumbo v0, "StartKnoxGuard"
+ 
+-- 
+2.43.0

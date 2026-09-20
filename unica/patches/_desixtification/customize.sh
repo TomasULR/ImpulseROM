@@ -1,27 +1,42 @@
-if [[ $TARGET_SINGLE_SYSTEM_IMAGE == "qssi" || $TARGET_SINGLE_SYSTEM_IMAGE == "essi" ]]; then
+if [[ $TARGET_SINGLE_SYSTEM_IMAGE == "qssi" || \
+        $TARGET_SINGLE_SYSTEM_IMAGE == "essi" || \
+        $TARGET_SINGLE_SYSTEM_IMAGE == "essi85" ]]; then
     LOG_STEP_IN "- Target device with 32-Bit HALs detected."
 
-    LOG_STEP_IN "- Adding S23 FE (r11sxxx) lib/ blobs"
-    ADD_TO_WORK_DIR "r11sxxx" "system" "system/lib" 0 0 644
+    MULTILIB_SOURCE="r11sxxx"
+    if [[ "$TARGET_SINGLE_SYSTEM_IMAGE" == "essi85" ]]; then
+        [ -n "${MULTILIB_FIRMWARE:-}" ] || \
+            ABORT "MULTILIB_FIRMWARE is required for essi85"
+        MULTILIB_SOURCE="$MULTILIB_FIRMWARE"
+    fi
+
+    LOG_STEP_IN "- Adding multilib system runtime from $MULTILIB_SOURCE"
+    DELETE_FROM_WORK_DIR "system" "system/lib"
+    ADD_TO_WORK_DIR "$MULTILIB_SOURCE" "system" "system/lib"
 
     BLOBS_LIST="
     system/apex/com.android.i18n.apex
     system/apex/com.android.runtime.apex
-    system/apex/com.google.android.tzdata6.apex
     system/bin/bootstrap/linker
     system/bin/bootstrap/linker_asan
     "
+    if [[ "$TARGET_SINGLE_SYSTEM_IMAGE" != "essi85" ]]; then
+        # The legacy Android 15 source module carried its matching tzdata APEX.
+        # The essi85 donor already supplies an API 36 architecture-neutral one.
+        BLOBS_LIST+=" system/apex/com.google.android.tzdata6.apex"
+    fi
     for blob in $BLOBS_LIST
     do
-        ADD_TO_WORK_DIR "r11sxxx" "system" "$blob"
+        DELETE_FROM_WORK_DIR "system" "$blob"
+        ADD_TO_WORK_DIR "$MULTILIB_SOURCE" "system" "$blob"
     done
     LOG_STEP_OUT
 
     LOG_STEP_IN "- Creating symlinks"
     ln -sf "/apex/com.android.runtime/bin/linker" "$WORK_DIR/system/system/bin/linker"
     ln -sf "/apex/com.android.runtime/bin/linker" "$WORK_DIR/system/system/bin/linker_asan"
-    SET_METADATA "system" "system/bin/linker" 0 0 755 "u:object_r:system_file:s0"
-    SET_METADATA "system" "system/bin/linker_asan" 0 0 755 "u:object_r:system_file:s0"
+    SET_METADATA "system" "system/bin/linker" 0 0 755 "u:object_r:system_linker_exec:s0"
+    SET_METADATA "system" "system/bin/linker_asan" 0 0 755 "u:object_r:system_linker_exec:s0"
 
     ln -sf "/apex/com.android.runtime/lib/bionic/libc.so" "$WORK_DIR/system/system/lib/libc.so"
     ln -sf "/apex/com.android.runtime/lib/bionic/libdl.so" "$WORK_DIR/system/system/lib/libdl.so"
@@ -41,6 +56,7 @@ if [[ $TARGET_SINGLE_SYSTEM_IMAGE == "qssi" || $TARGET_SINGLE_SYSTEM_IMAGE == "e
     SET_PROP "vendor" "dalvik.vm.dex2oat64.enabled" "true"
     LOG_STEP_OUT
 
+    unset MULTILIB_SOURCE BLOBS_LIST blob
     LOG_STEP_OUT
 else
     LOG "- Target device does not use 32-Bit HALs. Ignoring."

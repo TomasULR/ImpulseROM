@@ -25,13 +25,29 @@ TARGET_EXTRA_FIRMWARES=("")
 TARGET_API_LEVEL=31
 TARGET_PRODUCT_FIRST_API_LEVEL=28
 TARGET_VNDK_VERSION=31
-TARGET_SINGLE_SYSTEM_IMAGE="essi"
+# The fstab.exynos9825 mnt_point for "system" literally reads /system, but
+# init's own boot log ("init: Switching root to '/system'") proves this
+# ramdisk's init binary performs a genuine switch_root into the system
+# partition regardless of that field, matching true system-as-root behavior.
+# A flat (non-root) system.img broke that switch_root outright ("Unable to
+# move mount at '/dev': No such file or directory" -> immediate kernel
+# panic), while the original nested (system-as-root) image let switch_root
+# and every partition mount succeed. Keep system-as-root for d2s; a second,
+# separate defect (a post-mount hang before SELinux/property loading) is
+# still open and unrelated to this setting.
+TARGET_SYSTEM_AS_ROOT=true
+TARGET_SINGLE_SYSTEM_IMAGE="essi85"
 TARGET_OS_FILE_SYSTEM="erofs"
 TARGET_SUPER_PARTITION_SIZE=0
 TARGET_SUPER_GROUP_NAME="none"
 TARGET_SUPER_GROUP_SIZE=0
 TARGET_HAS_SYSTEM_EXT=false
 TARGET_BOOT_DEVICE_PATH="/dev/block/by-name"
+# Verified from TWRP resize2fs output after the EternityROM repartition. These
+# are physical partition ceilings, not desired filesystem sizes.
+TARGET_SYSTEM_PARTITION_SIZE=9437184000
+TARGET_PRISM_PARTITION_SIZE=734003200
+TARGET_OPTICS_PARTITION_SIZE=31457280
 
 # SEC Product Feature
 TARGET_AUDIO_SUPPORT_ACH_RINGTONE=false

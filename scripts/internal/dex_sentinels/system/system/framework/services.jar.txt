@@ -1,0 +1,7 @@
+# These boot-critical PackageManager and WindowManager classes must remain in
+# the same logical services.jar DEX unit across the DEX 041 -> DEX 040 split.
+Lcom/android/server/pm/PackageManagerService;
+Lcom/android/server/pm/InstallPackageHelper;
+Lcom/android/server/pm/PackageManagerServiceUtils;
+Lcom/android/server/pm/ScanPackageUtils;
+Lcom/android/server/wm/WindowManagerService;

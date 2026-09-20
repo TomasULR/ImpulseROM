@@ -52,13 +52,20 @@ recovery-from-boot.p
 PRODUCT_DEBLOAT+="
 app/Chrome64
 app/Duo
-app/Gmail2
 app/Maps
 app/YouTube
 overlay/GmsConfigOverlaySearchSelector.apk
 priv-app/FamilyLinkParentalControls
 priv-app/SearchSelector
 "
+
+# Keep the donor Gmail package in the d2s Impulse profile. Other targets keep
+# the upstream debloat policy; no live download or APK re-signing is needed.
+if [[ "$TARGET_CODENAME" != "d2s" || "$TARGET_SINGLE_SYSTEM_IMAGE" != "essi85" ]]; then
+    PRODUCT_DEBLOAT+="
+app/Gmail2
+"
+fi
 
 SYSTEM_DEBLOAT+="
 system/app/Fast

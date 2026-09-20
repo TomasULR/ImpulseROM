@@ -32,6 +32,18 @@ CSC_TAR=""
 
 TMP_DIR="$(mktemp -d)"
 
+CLEANUP_TMP_DIR()
+{
+    if mountpoint -q "$TMP_DIR"; then
+        sudo -n umount "$TMP_DIR" &> /dev/null || true
+    fi
+    rm -rf "$TMP_DIR"
+}
+
+trap CLEANUP_TMP_DIR EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 EXTRACT_AVB_BINARIES()
 {
     if FILE_EXISTS_IN_TAR "$BL_TAR" "vbmeta.img" || FILE_EXISTS_IN_TAR "$BL_TAR" "vbmeta.img.lz4"; then
@@ -120,7 +132,10 @@ EXTRACT_OS_PARTITIONS()
 
         [ -f "$FW_DIR/${MODEL}_${CSC}/$f" ] || continue
 
-        if ! sudo -n -v &> /dev/null; then
+        # `sudo -v` can still request a password when the user also belongs to
+        # a passworded sudo group, even if the concrete commands are covered
+        # by a NOPASSWD rule. Test an actual harmless command instead.
+        if ! sudo -n true &> /dev/null; then
             LOG "\033[0;33m! Asking user for sudo password\033[0m"
             if ! sudo -v 2> /dev/null; then
                 LOGE "Root permissions are required to unpack OS partitions"
@@ -131,7 +146,9 @@ EXTRACT_OS_PARTITIONS()
         LOG "- Unpacking $(basename "$f")..."
 
         mkdir -p "$FW_DIR/${MODEL}_${CSC}/$PARTITION"
-        sudo umount "$FW_DIR/${MODEL}_${CSC}/$f" &> /dev/null
+        if mountpoint -q "$TMP_DIR"; then
+            EVAL "sudo umount \"$TMP_DIR\"" || exit 1
+        fi
         if [[ "$(GET_IMAGE_FILE_SYSTEM "$FW_DIR/${MODEL}_${CSC}/$f")" == "erofs" ]]; then
             EVAL "sudo env \"PATH=$PATH\" fuse.erofs \"$FW_DIR/${MODEL}_${CSC}/$f\" \"$TMP_DIR\"" || exit 1
         else
@@ -143,8 +160,8 @@ EXTRACT_OS_PARTITIONS()
 
         LOG "- Generating fs_config/file_context for $(basename "$f")..."
 
-        EVAL "sudo find \"$TMP_DIR\" | sudo xargs -I \"{}\" -P \"$(nproc)\" stat -c \"%n %u %g %a capabilities=0x0\" \"{}\" > \"$FW_DIR/${MODEL}_${CSC}/fs_config-$PARTITION\"" || exit 1
-        EVAL "sudo find \"$TMP_DIR\" | sudo xargs -I \"{}\" -P \"$(nproc)\" sh -c 'echo \"\$1 \$(getfattr -n security.selinux --only-values -h --absolute-names \"\$1\")\"' \"sh\" \"{}\" > \"$FW_DIR/${MODEL}_${CSC}/file_context-$PARTITION\"" || exit 1
+        EVAL "sudo find \"$TMP_DIR\" -print0 | sudo xargs -0 -r -n 1 -P \"$(nproc)\" stat -c \"%n %u %g %a capabilities=0x0\" > \"$FW_DIR/${MODEL}_${CSC}/fs_config-$PARTITION\"" || exit 1
+        EVAL "sudo find \"$TMP_DIR\" -print0 | sudo xargs -0 -r -n 1 -P \"$(nproc)\" sh -c 'echo \"\$1 \$(getfattr -n security.selinux --only-values -h --absolute-names \"\$1\")\"' \"sh\" > \"$FW_DIR/${MODEL}_${CSC}/file_context-$PARTITION\"" || exit 1
         sort -o "$FW_DIR/${MODEL}_${CSC}/fs_config-$PARTITION" "$FW_DIR/${MODEL}_${CSC}/fs_config-$PARTITION"
         sort -o "$FW_DIR/${MODEL}_${CSC}/file_context-$PARTITION" "$FW_DIR/${MODEL}_${CSC}/file_context-$PARTITION"
         # https://source.android.com/docs/core/architecture/partitions/system-as-root
@@ -406,7 +423,12 @@ for i in "${FIRMWARES[@]}"; do
         exit 1
     fi
 
-    [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ] && rm -rf "$FW_DIR/${MODEL}_${CSC}"
+    # A failed extraction can leave complete-looking partition images without
+    # an .extracted marker. Never reuse that partial state: it may have been
+    # interrupted during decompression, unsparse conversion, or mounting.
+    if [ -d "$FW_DIR/${MODEL}_${CSC}" ]; then
+        rm -rf "$FW_DIR/${MODEL}_${CSC}"
+    fi
     mkdir -p "$FW_DIR/${MODEL}_${CSC}"
 
     DOWNLOADED_FIRMWARE="$(cat "$ODIN_DIR/${MODEL}_${CSC}/.downloaded")"
@@ -435,7 +457,5 @@ for i in "${FIRMWARES[@]}"; do
 
     LOG_STEP_OUT; LOG_STEP_OUT
 done
-
-rm -rf "$TMP_DIR"
 
 exit 0

@@ -1,0 +1,4 @@
+id=android16_compat
+name=Android 16 legacy-vendor contracts
+author=EternityROM
+description=Preserve d2s FCM, BPF, audio, KnoxGuard, Secure Folder and ueventd contracts for Android 16.

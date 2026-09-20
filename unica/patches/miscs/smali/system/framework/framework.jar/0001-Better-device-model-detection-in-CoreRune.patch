@@ -8,23 +8,23 @@ diff --git a/smali_classes6/com/samsung/android/rune/CoreRune.smali b/smali_clas
 index 3c0a3d21..b4995176 100644
 --- a/smali_classes6/com/samsung/android/rune/CoreRune.smali
 +++ b/smali_classes6/com/samsung/android/rune/CoreRune.smali
-@@ -4736,7 +4736,7 @@
+@@ -2583,7 +2583,7 @@
  
-     sput-boolean v0, Lcom/samsung/android/rune/CoreRune;->SUPPORT_APP_JUMP_BLOCK:Z
+     sput-boolean v1, Lcom/samsung/android/rune/CoreRune;->FW_WAIT_TO_HANDLE_RESIZING_FROM_CLIENT:Z
  
--    const-string v0, "ro.product.device"
-+    const-string v0, "ro.product.vendor.device"
+-    const-string/jumbo v1, "ro.product.device"
++    const-string/jumbo v1, "ro.product.vendor.device"
  
-     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+     invoke-static {v1}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
  
-@@ -4914,7 +4914,7 @@
+@@ -3824,7 +3824,7 @@
  
-     if-eqz v0, :cond_4d
+     const-string v11, "None"
  
--    const-string v0, "ro.product.model"
-+    const-string v0, "ro.product.vendor.model"
+-    const-string/jumbo v13, "ro.product.model"
++    const-string/jumbo v13, "ro.product.vendor.model"
  
-     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+     invoke-static {v13, v11}, Landroid/os/SystemProperties;->get(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
  
 -- 
 2.46.0

@@ -56,21 +56,24 @@ BUILD_IMAGE_MKFS()
             BUILD_CMD+="--inode_size \"256\" "
             BUILD_CMD+="\"$FILE_CONTEXT_FILE\""
 
-            # Avoid build failures if lost+found entry is not in file_context/fs_config
-            if ! grep -q -F "lost+found" "$FILE_CONTEXT_FILE"; then
-                if [[ "$PARTITION" == "system" ]]; then
-                    echo "/lost\+found u:object_r:rootfs:s0" >> "$FILE_CONTEXT_FILE"
-                else
-                    echo "/$PARTITION/lost\+found $(head -n 1 "$FILE_CONTEXT_FILE" | cut -f 2 -d " ")" >> "$FILE_CONTEXT_FILE"
-                fi
+            # Avoid build failures if lost+found entry is not in file_context/fs_config.
+            # Check (and add, if missing) the entry actually relative to
+            # MOUNT_POINT: a stale entry written for a different mount point
+            # convention (e.g. left over from switching TARGET_SYSTEM_AS_ROOT)
+            # would not match what e2fsdroid looks up and must not be trusted.
+            local LOST_FOUND_FC_PATH="/lost\+found"
+            local LOST_FOUND_FSC_PATH="lost+found"
+            if [[ "$MOUNT_POINT" != "/" ]]; then
+                LOST_FOUND_FC_PATH="/$MOUNT_POINT/lost\+found"
+                LOST_FOUND_FSC_PATH="$MOUNT_POINT/lost+found"
             fi
 
-            if ! grep -q -F "lost+found" "$FS_CONFIG_FILE"; then
-                if [[ "$PARTITION" == "system" ]]; then
-                    echo "lost+found 0 0 700 capabilities=0x0" >> "$FS_CONFIG_FILE"
-                else
-                    echo "$PARTITION/lost+found 0 0 700 capabilities=0x0" >> "$FS_CONFIG_FILE"
-                fi
+            if ! grep -q -F "$LOST_FOUND_FC_PATH " "$FILE_CONTEXT_FILE"; then
+                echo "$LOST_FOUND_FC_PATH u:object_r:rootfs:s0" >> "$FILE_CONTEXT_FILE"
+            fi
+
+            if ! grep -q -F "$LOST_FOUND_FSC_PATH " "$FS_CONFIG_FILE"; then
+                echo "$LOST_FOUND_FSC_PATH 0 0 700 capabilities=0x0" >> "$FS_CONFIG_FILE"
             fi
             ;;
         "erofs")
@@ -222,7 +225,12 @@ PREPARE_SCRIPT()
 
     MOUNT_POINT="$PARTITION"
     # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/build_image.py#191
-    [[ "$PARTITION" == "system" ]] && MOUNT_POINT="/"
+    # Only applies when the target device actually mounts "system" at real
+    # root; devices that mount it at the conventional /system (see
+    # TARGET_SYSTEM_AS_ROOT) keep the default partition-name mount point.
+    if [[ "$PARTITION" == "system" ]] && [[ "${TARGET_SYSTEM_AS_ROOT:-true}" == "true" ]]; then
+        MOUNT_POINT="/"
+    fi
 
     if [ ! "$OUTPUT_FILE" ]; then
         OUTPUT_FILE="$(dirname "$INPUT_DIR")/$PARTITION.img"

@@ -11,6 +11,43 @@ GET_FP_SENSOR_TYPE()
         LOGE "Unsupported type: \"$1\""
     fi
 }
+
+RESOLVE_APKTOOL_PATH()
+{
+    local FILE="$1"
+    local DIRECT_PATH="$APKTOOL_DIR/$FILE"
+    if [ -f "$DIRECT_PATH" ]; then
+        echo "$DIRECT_PATH"
+        return 0
+    fi
+
+    local ROOT_REL="${FILE%%/smali*}"
+    if [[ "$ROOT_REL" == "$FILE" ]]; then
+        ROOT_REL="$(dirname "$FILE")"
+    fi
+
+    local ROOT_PATH="$APKTOOL_DIR/$ROOT_REL"
+    local FILE_NAME
+    FILE_NAME="$(basename "$FILE")"
+    if [ -d "$ROOT_PATH" ]; then
+        find "$ROOT_PATH" -type f -name "$FILE_NAME" | head -n 1
+    fi
+}
+
+SED_APKTOOL_FILE()
+{
+    local FILE="$1"
+    shift
+
+    local FILE_PATH
+    FILE_PATH="$(RESOLVE_APKTOOL_PATH "$FILE")"
+    if [ ! "$FILE_PATH" ]; then
+        LOGW "\033[0;33m! APKTOOL file not found: /$FILE\033[0m"
+        return 0
+    fi
+
+    sed -i "$@" "$FILE_PATH"
+}
 # ]
 
 MODEL=$(echo -n "$TARGET_FIRMWARE" | cut -d "/" -f 1)
@@ -30,10 +67,8 @@ if [[ "$SOURCE_PRODUCT_FIRST_API_LEVEL" != "$TARGET_PRODUCT_FIRST_API_LEVEL" ]];
     system/framework/services.jar/smali_classes2/com/android/server/sepunion/EngmodeService\$EngmodeTimeThread.smali
     "
     for f in $FTP; do
-        sed -i \
-            "s/\"MAINLINE_API_LEVEL: $SOURCE_PRODUCT_FIRST_API_LEVEL\"/\"MAINLINE_API_LEVEL: $TARGET_PRODUCT_FIRST_API_LEVEL\"/g" \
-            "$APKTOOL_DIR/$f"
-        sed -i "s/\"$SOURCE_PRODUCT_FIRST_API_LEVEL\"/\"$TARGET_PRODUCT_FIRST_API_LEVEL\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"MAINLINE_API_LEVEL: $SOURCE_PRODUCT_FIRST_API_LEVEL\"/\"MAINLINE_API_LEVEL: $TARGET_PRODUCT_FIRST_API_LEVEL\"/g"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_PRODUCT_FIRST_API_LEVEL\"/\"$TARGET_PRODUCT_FIRST_API_LEVEL\"/g"
     done
     LOG_STEP_OUT
 fi
@@ -51,7 +86,7 @@ if [[ "$SOURCE_AUTO_BRIGHTNESS_TYPE" != "$TARGET_AUTO_BRIGHTNESS_TYPE" && "$TARG
     system/priv-app/SecSettings/SecSettings.apk/smali_classes4/com/samsung/android/settings/Rune.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_AUTO_BRIGHTNESS_TYPE\"/\"$TARGET_AUTO_BRIGHTNESS_TYPE\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_AUTO_BRIGHTNESS_TYPE\"/\"$TARGET_AUTO_BRIGHTNESS_TYPE\"/g"
     done
 
     # WORKAROUND: Skip failure on CALIBRATEDLUX
@@ -80,13 +115,23 @@ if [[ "$SOURCE_FP_SENSOR_CONFIG" != "$TARGET_FP_SENSOR_CONFIG" ]]; then
     system/priv-app/SecSettings/SecSettings.apk/smali_classes4/com/samsung/android/settings/biometrics/fingerprint/FingerprintLockSettings.smali
     "
     for f in $FTP; do
-        sed -i "s/$SOURCE_FP_SENSOR_CONFIG/$TARGET_FP_SENSOR_CONFIG/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/$SOURCE_FP_SENSOR_CONFIG/$TARGET_FP_SENSOR_CONFIG/g"
     done
 
     if [[ "$(GET_FP_SENSOR_TYPE "$TARGET_FP_SENSOR_CONFIG")" == "ultrasonic" ]]; then
-        ADD_TO_WORK_DIR "e1sxxx" "system" "system/bin/surfaceflinger"
-        ADD_TO_WORK_DIR "e1sxxx" "system" "system/lib64/libgui.so"
-        ADD_TO_WORK_DIR "e1sxxx" "system" "system/lib64/libui.so"
+        # Android 16 graphics libraries form one tightly coupled platform ABI.
+        # The legacy e1s prebuilts are Android 15 and make API 36 vendor HALs
+        # pull a graphics.common provider that the source system cannot expose.
+        # Keep the coherent source-native stack; the feature-specific behavior
+        # is enabled by the framework/SystemUI patches and floating features
+        # below.
+        if [[ "$SOURCE_API_LEVEL" -lt 36 ]]; then
+            ADD_TO_WORK_DIR "e1sxxx" "system" "system/bin/surfaceflinger"
+            ADD_TO_WORK_DIR "e1sxxx" "system" "system/lib64/libgui.so"
+            ADD_TO_WORK_DIR "e1sxxx" "system" "system/lib64/libui.so"
+        else
+            LOG "- Keeping API $SOURCE_API_LEVEL source graphics core for ultrasonic fingerprint"
+        fi
         APPLY_PATCH "system" "system/framework/services.jar" "$SRC_DIR/unica/patches/product_feature/fingerprint/services.jar/0001-Set-FP_FEATURE_SENSOR_IS_OPTICAL-to-false.patch"
         APPLY_PATCH "system" "system/priv-app/BiometricSetting/BiometricSetting.apk" "$SRC_DIR/unica/patches/product_feature/fingerprint/BiometricSetting.apk/0001-Set-FP_FEATURE_SENSOR_IS_OPTICAL-to-false.patch"
         APPLY_PATCH "system_ext" "priv-app/SystemUI/SystemUI.apk" "$SRC_DIR/unica/patches/product_feature/fingerprint/SystemUI.apk/0001-Set-SECURITY_FINGERPRINT_IN_DISPLAY_OPTICAL-to-false.patch"
@@ -113,11 +158,20 @@ if ! $SOURCE_HAS_QHD_DISPLAY; then
         DECODE_APK "system" "system/framework/gamemanager.jar"
         DECODE_APK "system" "system/priv-app/SecSettings/SecSettings.apk"
 
-        ADD_TO_WORK_DIR "e2sxxx" "system" "system/bin/bootanimation"
-        ADD_TO_WORK_DIR "e2sxxx" "system" "system/bin/surfaceflinger"
-        ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libgui.so"
-        ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libui.so"
-        ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libandroid_runtime.so"
+        # Do not splice Android 15 e2s platform binaries into Android 16.
+        # The API 36 source surfaceflinger already contains Samsung's
+        # MultiResolution implementation. Keeping all five source files as a
+        # unit also preserves the exact graphics.common AIDL generation used
+        # by the rest of the framework and by the legacy d2s vendor closure.
+        if [[ "$SOURCE_API_LEVEL" -lt 36 ]]; then
+            ADD_TO_WORK_DIR "e2sxxx" "system" "system/bin/bootanimation"
+            ADD_TO_WORK_DIR "e2sxxx" "system" "system/bin/surfaceflinger"
+            ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libgui.so"
+            ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libui.so"
+            ADD_TO_WORK_DIR "e2sxxx" "system" "system/lib64/libandroid_runtime.so"
+        else
+            LOG "- Keeping API $SOURCE_API_LEVEL source graphics core for multi resolution"
+        fi
         ADD_TO_WORK_DIR "e2sxxx" "system" "media"
         APPLY_PATCH "system" "system/framework/framework.jar" "$SRC_DIR/unica/patches/product_feature/resolution/framework.jar/0001-Enable-dynamic-resolution-control.patch"
         APPLY_PATCH "system" "system/framework/gamemanager.jar" "$SRC_DIR/unica/patches/product_feature/resolution/gamemanager.jar/0001-Enable-dynamic-resolution-control.patch"
@@ -146,6 +200,7 @@ if ! $SOURCE_HAS_HW_MDNIE; then
         ADD_TO_WORK_DIR "e2sxxx" "system" "system/bin/mafpc_write" 0 2000 755 "u:object_r:mafpc_write_exec:s0"
         ADD_TO_WORK_DIR "e2sxxx" "system" "system/etc/permissions/privapp-permissions-com.samsung.android.sead.xml" 0 0 644 "u:object_r:system_file:s0"
         ADD_TO_WORK_DIR "e2sxxx" "system" "system/priv-app/EnvironmentAdaptiveDisplay"
+        APPLY_PATCH "system" "system/priv-app/EnvironmentAdaptiveDisplay/EnvironmentAdaptiveDisplay.apk" "$SRC_DIR/unica/patches/product_feature/mdnie/hw/EnvironmentAdaptiveDisplay.apk/0001-Fix-framework-resource-IDs-for-API-36.patch"
         LOG_STEP_OUT
     fi
 fi
@@ -175,7 +230,7 @@ if [[ "$SOURCE_MDNIE_SUPPORTED_MODES" != "$TARGET_MDNIE_SUPPORTED_MODES" ]]; the
     system/framework/services.jar/smali_classes2/com/samsung/android/hardware/display/SemMdnieManagerService.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_MDNIE_SUPPORTED_MODES\"/\"$TARGET_MDNIE_SUPPORTED_MODES\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_MDNIE_SUPPORTED_MODES\"/\"$TARGET_MDNIE_SUPPORTED_MODES\"/g"
     done
     LOG_STEP_OUT
 fi
@@ -190,8 +245,8 @@ else
     system/framework/framework.jar/smali_classes6/com/samsung/android/hardware/display/RefreshRateConfig.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_HFR_SEAMLESS_BRT\"/\"$TARGET_HFR_SEAMLESS_BRT\"/g" "$APKTOOL_DIR/$f"
-        sed -i "s/\"$SOURCE_HFR_SEAMLESS_LUX\"/\"$TARGET_HFR_SEAMLESS_LUX\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_SEAMLESS_BRT\"/\"$TARGET_HFR_SEAMLESS_BRT\"/g"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_SEAMLESS_LUX\"/\"$TARGET_HFR_SEAMLESS_LUX\"/g"
     done
 fi
 
@@ -216,7 +271,7 @@ if [[ "$SOURCE_HFR_MODE" != "$TARGET_HFR_MODE" ]]; then
     system_ext/priv-app/SystemUI/SystemUI.apk/smali/com/android/systemui/LsRune.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_HFR_MODE\"/\"$TARGET_HFR_MODE\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_MODE\"/\"$TARGET_HFR_MODE\"/g"
     done
 
     if [[ "$TARGET_HFR_MODE" -eq 0 ]]; then
@@ -224,7 +279,7 @@ if [[ "$SOURCE_HFR_MODE" != "$TARGET_HFR_MODE" ]]; then
     else
         REPL=$TARGET_HFR_MODE
     fi
-    sed -i "s/\"$SOURCE_HFR_MODE\"/\"$REPL\"/g" "$APKTOOL_DIR/system/framework/framework.jar/smali_classes6/com/samsung/android/rune/CoreRune.smali"
+    SED_APKTOOL_FILE "system/framework/framework.jar/smali_classes6/com/samsung/android/rune/CoreRune.smali" "s/\"$SOURCE_HFR_MODE\"/\"$REPL\"/g"
     LOG_STEP_OUT
 fi
 
@@ -240,9 +295,9 @@ if [[ "$SOURCE_HFR_SUPPORTED_REFRESH_RATE" != "$TARGET_HFR_SUPPORTED_REFRESH_RAT
     "
     for f in $FTP; do
         if [[ "$TARGET_HFR_SUPPORTED_REFRESH_RATE" != "none" ]]; then
-            sed -i "s/\"$SOURCE_HFR_SUPPORTED_REFRESH_RATE\"/\"$TARGET_HFR_SUPPORTED_REFRESH_RATE\"/g" "$APKTOOL_DIR/$f"
+            SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_SUPPORTED_REFRESH_RATE\"/\"$TARGET_HFR_SUPPORTED_REFRESH_RATE\"/g"
         else
-            sed -i "s/\"$SOURCE_HFR_SUPPORTED_REFRESH_RATE\"/\"\"/g" "$APKTOOL_DIR/$f"
+            SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_SUPPORTED_REFRESH_RATE\"/\"\"/g"
         fi
     done
     LOG_STEP_OUT
@@ -260,7 +315,7 @@ if [[ "$SOURCE_HFR_DEFAULT_REFRESH_RATE" != "$TARGET_HFR_DEFAULT_REFRESH_RATE" ]
     system/priv-app/SettingsProvider/SettingsProvider.apk/smali/com/android/providers/settings/DatabaseHelper.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_HFR_DEFAULT_REFRESH_RATE\"/\"$TARGET_HFR_DEFAULT_REFRESH_RATE\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_HFR_DEFAULT_REFRESH_RATE\"/\"$TARGET_HFR_DEFAULT_REFRESH_RATE\"/g"
     done
     LOG_STEP_OUT
 fi
@@ -280,7 +335,7 @@ if [[ "$SOURCE_DVFS_CONFIG_NAME" != "$TARGET_DVFS_CONFIG_NAME" ]]; then
     system/framework/ssrm.jar/smali/com/android/server/ssrm/Feature.smali
     "
     for f in $FTP; do
-        sed -i "s/\"$SOURCE_DVFS_CONFIG_NAME\"/\"$TARGET_DVFS_CONFIG_NAME\"/g" "$APKTOOL_DIR/$f"
+        SED_APKTOOL_FILE "$f" "s/\"$SOURCE_DVFS_CONFIG_NAME\"/\"$TARGET_DVFS_CONFIG_NAME\"/g"
     done
     LOG_STEP_OUT
 fi

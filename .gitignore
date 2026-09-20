@@ -1,5 +1,10 @@
 out/
 
+# Python cache files
+__pycache__/
+*.py[cod]
+samloader.log
+
 # MacOS files
 *.DS_Store
 
@@ -9,6 +14,31 @@ out/
 # Cert
 security/eternityrom_platform.x509.pem
 security/eternityrom_platform.pk8
+# Impulse ROM signing material. The .pk8 is the private platform key: losing
+# it means no future build can ever sign an in-place update for devices
+# already running Impulse. Committing it means anyone can. Back it up
+# offline, never here. The cert is ignored alongside it so that a checkout
+# without the key falls back to the aosp prefix instead of embedding an
+# Impulse cert it cannot actually sign with.
+security/impulse_platform.x509.pem
+security/impulse_platform.pk8
+
+# Defense in depth: catch any signing/credential material that ends up
+# somewhere other than security/ by mistake. This is a safety net, not a
+# substitute for keeping real keys out of the working tree entirely.
+*.keystore
+*.jks
+*.p12
+id_rsa
+id_ed25519
+*.env
+
+# Internal release-tracking note: quotes third-party XDA forum content and
+# must not be published in the public source repo.
+docs/RELEASE_WORK_20260919.md
+
+# Personal editor config, not project policy.
+.vscode/
 
 #
 # We don't want to ignore the following even if they are dot-files

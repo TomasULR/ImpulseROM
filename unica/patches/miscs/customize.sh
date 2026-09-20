@@ -6,10 +6,10 @@ REGION=$(echo -n "$TARGET_FIRMWARE" | cut -d "/" -f 2)
 ROM_STATUS=""
 $ROM_IS_OFFICIAL || ROM_STATUS=" UNOFFICIAL"
 VALUE="$(GET_PROP "$WORK_DIR/system/system/build.prop" "ro.build.display.id")"
-SET_PROP "system" "ro.build.display.id" "EternityROM $ROM_VERSION $ROM_COMMIT ($VALUE)"
+SET_PROP "system" "ro.build.display.id" "Impulse $ROM_VERSION $ROM_COMMIT ($VALUE)"
 
-SET_PROP "system" "ro.eternityrom.official" "$ROM_IS_OFFICIAL"
-SET_PROP "system" "ro.eternityrom.version" "$ROM_VERSION"
+SET_PROP "system" "ro.impulserom.official" "$ROM_IS_OFFICIAL"
+SET_PROP "system" "ro.impulserom.version" "$ROM_VERSION"
 
 # Disable FRP
 SET_PROP "product" "ro.frp.pst" ""
